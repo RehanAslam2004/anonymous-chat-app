@@ -66,10 +66,10 @@ def handle_message(data):
     emit("message", {"handle": handle, "text": text}, to=room)
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("STARTING CHAT APP SERVER")
-    print("="*60)
-    print("URL: http://127.0.0.1:5000")
-    print("Opening http://localhost:5000 in your browser...")
-    print("="*60 + "\n")
-    socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    # Get the PORT from Render, or use 5000 if testing locally
+    port = int(os.environ.get("PORT", 5000)) 
+    
+    print(f"Starting server on port {port}...")
+    
+    # CHANGE: host must be '0.0.0.0' for Render
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
