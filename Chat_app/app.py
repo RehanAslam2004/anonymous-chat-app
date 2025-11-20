@@ -7,15 +7,21 @@ from pathlib import Path
 import db
 
 # Load environment variables from .env file (in parent directory)
+# NOTE: On Render, you must add these variables in the "Environment" tab manually.
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(env_path)
 
 app = Flask(__name__, template_folder='Templates', static_folder='../static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')  
+
+# IMPORTANT: Since you are using async_mode='eventlet', make sure 'eventlet' is in your requirements.txt
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25, logger=False, engineio_logger=False)
 
 # Initialize Supabase database
-db.init_db()
+try:
+    db.init_db()
+except Exception as e:
+    print(f"[WARNING] Database initialization failed: {e}")
 
 def random_handle():
     return "Anon-" + secrets.token_hex(3)
@@ -42,11 +48,13 @@ def handle_join(data):
     print(f"[LOG] User {handle} joined room {room}")
     
     # Create room entry in database if enabled
-    db.create_room(room)
-    
-    # Send message history to the new user
-    history = db.get_messages(room)
-    emit("message_history", {"messages": history})
+    try:
+        db.create_room(room)
+        # Send message history to the new user
+        history = db.get_messages(room)
+        emit("message_history", {"messages": history})
+    except Exception as e:
+        print(f"[ERROR] Database error on join: {e}")
     
     emit("system", f"{handle} joined the room.", to=room)
     emit("your_handle", handle)
@@ -61,15 +69,20 @@ def handle_message(data):
     print(f"[LOG] Message from {handle} in {room}: {text}")
     
     # Save to Supabase if enabled
-    db.save_message(room, handle, text)
+    try:
+        db.save_message(room, handle, text)
+    except Exception as e:
+        print(f"[ERROR] Database save failed: {e}")
     
     emit("message", {"handle": handle, "text": text}, to=room)
 
 if __name__ == "__main__":
+    # FIX: Get the PORT from Render environment variable, default to 5000 only for local testing
+    port = int(os.environ.get("PORT", 5000))
+    
     print("\n" + "="*60)
-    print("STARTING CHAT APP SERVER")
+    print(f"STARTING CHAT APP SERVER on PORT {port}")
     print("="*60)
-    print("URL: http://127.0.0.1:5000")
-    print("Opening http://localhost:5000 in your browser...")
-    print("="*60 + "\n")
-    socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    
+    # FIX: Host must be '0.0.0.0' for Render to route traffic correctly
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
